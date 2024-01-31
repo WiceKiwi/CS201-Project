@@ -1,0 +1,181 @@
+// QUADTREE WITH ERROR_THRESHOLD, best so far, using RMSE
+
+import java.io.*;
+import java.util.ArrayList;
+import java.util.List;
+
+public class Utility {
+
+    private static final double ERROR_THRESHOLD = 8;
+    private static final int MAX_DEPTH = 5; // Adjust this as needed
+
+    private static class Quadrant implements Serializable {
+        int x, y, width, height;
+        int color;
+
+        Quadrant(int x, int y, int width, int height, int color) {
+            this.x = x;
+            this.y = y;
+            this.width = width;
+            this.height = height;
+            this.color = color;
+
+        }
+    }
+
+    public void Compress(int[][][] pixels, String outputFileName) throws IOException {
+        int width = pixels.length;
+        int height = pixels[0].length;
+        List<Quadrant> quadrants = new ArrayList<>();
+        compressQuadtree(pixels, 0, 0, width, height, quadrants, 0);
+
+        try (FileOutputStream fos = new FileOutputStream(outputFileName);
+                ObjectOutputStream oos = new ObjectOutputStream(fos)) {
+
+            // Write the width and height as integers
+            oos.writeInt(width);
+            oos.writeInt(height);
+
+            // Write the list of Quadrant objects
+            oos.writeObject(quadrants);
+        }
+    }
+
+    // Decompression method without Huffman decoding
+    public int[][][] Decompress(String inputFileName) throws IOException, ClassNotFoundException {
+        try (ObjectInputStream input = new ObjectInputStream(new FileInputStream(inputFileName))) {
+            // Read the width as an integer
+            int width = input.readInt();
+
+            // Read the height as an integer
+            int height = input.readInt();
+
+            // Read the list of Quadrant objects
+            List<Quadrant> quadrants = (List<Quadrant>) input.readObject();
+
+            // Now you have the width, height, and the list of Quadrant objects
+            // Initialize the image data
+            int[][][] image = decompressQuadrant(quadrants, width, height);
+            return image;
+        }
+
+    }
+
+    private void compressQuadtree(int[][][] pixels, int x, int y, int width, int height, List<Quadrant> quadrants,
+            int depth) {
+        double error = calculateError(pixels, x, y, width, height);
+
+        if (error <= ERROR_THRESHOLD || depth > MAX_DEPTH) {
+            int color = getColor(pixels, x, y, width, height);
+            quadrants.add(new Quadrant(x, y, width, height, color));
+        } else {
+            int newWidth = width / 2;
+            int newHeight = height / 2;
+
+            if (depth >= MAX_DEPTH || error > ERROR_THRESHOLD ) {
+                compressQuadtree(pixels, x, y, newWidth, newHeight, quadrants, depth + 1);
+                compressQuadtree(pixels, x + newWidth, y, width - newWidth, newHeight, quadrants, depth + 1);
+                compressQuadtree(pixels, x, y + newHeight, newWidth, height - newHeight, quadrants, depth + 1);
+                compressQuadtree(pixels, x + newWidth, y + newHeight, width - newWidth, height - newHeight, quadrants, depth + 1);
+            }
+        }
+    }
+
+    private int getColor(int[][][] pixels, int x, int y, int width, int height) {
+        int[] colorSum = new int[3];
+        int count = 0;
+
+        for (int i = x; i < x + width; i++) {
+            for (int j = y; j < y + height; j++) {
+                for (int k = 0; k < 3; k++) {
+                    colorSum[k] += pixels[i][j][k];
+                }
+                count++;
+            }
+        }
+
+        if (count > 0) { // Check if count is greater than zero
+            int[] averageColor = new int[3];
+            for (int k = 0; k < 3; k++) {
+                averageColor[k] = colorSum[k] / count;
+            }
+
+            // Pack the average color into a single int (RGB format)
+            return (averageColor[0] << 16) | (averageColor[1] << 8) | averageColor[2];
+        } else {
+            // Handle the case where count is zero (e.g., return black as a packed int)
+            return (0 << 16) | (0 << 8) | 0; // Packed int for black color (RGB format)
+        }
+    }
+
+    private int[][][] decompressQuadrant(List<Quadrant> quadrants, int imageWidth, int imageHeight) {
+        if (quadrants == null || imageWidth <= 0 || imageHeight <= 0) {
+            throw new IllegalArgumentException("Invalid input parameters");
+        }
+
+        int[][][] result = new int[imageWidth][imageHeight][3];
+
+        for (Quadrant q : quadrants) {
+            for (int i = q.x; i < q.x + q.width && i < imageWidth; i++) {
+                for (int j = q.y; j < q.y + q.height && j < imageHeight; j++) {
+                    if (i >= 0 && j >= 0) {
+                        int packedColor = q.color;
+                        int red = (packedColor >> 16) & 0xFF;
+                        int green = (packedColor >> 8) & 0xFF;
+                        int blue = packedColor & 0xFF;
+
+                        result[i][j][0] = red;
+                        result[i][j][1] = green;
+                        result[i][j][2] = blue;
+                    }
+                }
+            }
+        }
+
+        return result;
+    }
+
+    private double calculateError(int[][][] pixels, int x, int y, int width, int height) {
+        // Calculate the average color for the current quadrant
+        int totalRed = 0;
+        int totalGreen = 0;
+        int totalBlue = 0;
+    
+        int quadrantSize = width * height; // Calculate the quadrant size
+    
+        if (quadrantSize == 0) {
+            return 0.0; // Return 0 error for empty quadrants
+        }
+    
+        for (int i = x; i < x + width; i++) {
+            for (int j = y; j < y + height; j++) {
+                totalRed += pixels[i][j][0];
+                totalGreen += pixels[i][j][1];
+                totalBlue += pixels[i][j][2];
+            }
+        }
+    
+        int avgRed = totalRed / quadrantSize;
+        int avgGreen = totalGreen / quadrantSize;
+        int avgBlue = totalBlue / quadrantSize;
+    
+        // Calculate the RMSE (Root Mean Square Error) for the quadrant
+        double sumOfSquaredDifferences = 0.0;
+        for (int i = x; i < x + width; i++) {
+            for (int j = y; j < y + height; j++) {
+                int redDiff = pixels[i][j][0] - avgRed;
+                int greenDiff = pixels[i][j][1] - avgGreen;
+                int blueDiff = pixels[i][j][2] - avgBlue;
+    
+                sumOfSquaredDifferences += redDiff * redDiff + greenDiff * greenDiff + blueDiff * blueDiff;
+            }
+        }
+    
+        double meanSquaredError = sumOfSquaredDifferences / quadrantSize;
+        double rootMeanSquareError = Math.sqrt(meanSquaredError);
+    
+        return rootMeanSquareError;
+    }
+
+}
+

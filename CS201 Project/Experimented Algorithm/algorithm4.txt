@@ -1,0 +1,52 @@
+// USING JAVA LIBRARY
+
+import java.awt.image.BufferedImage; 
+import java.io.*; 
+import javax.imageio.ImageIO; 
+ 
+public class Utility { 
+    public void Compress(int[][][] pixels, String outputFileName) throws IOException { 
+        try { 
+            // Convert the int[][][] pixels to a BufferedImage 
+            int height = pixels.length; 
+            int width = pixels[0].length; 
+            BufferedImage image = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB); 
+ 
+            for (int y = 0; y < height; y++) { 
+                for (int x = 0; x < width; x++) { 
+                    int rgb = (pixels[y][x][0] << 16) | (pixels[y][x][1] << 8) | pixels[y][x][2]; 
+                    image.setRGB(x, y, rgb); 
+                } 
+            } 
+ 
+            // Write the BufferedImage to a JPEG file 
+            ImageIO.write(image, "jpeg", new File(outputFileName)); 
+        } catch (IOException e) { 
+            e.printStackTrace(); 
+        } 
+    } 
+ 
+    public int[][][] Decompress(String inputFileName) throws IOException, ClassNotFoundException { 
+        try { 
+            // Read the JPEG image from the file 
+            BufferedImage image = ImageIO.read(new File(inputFileName)); 
+            int height = image.getHeight(); 
+            int width = image.getWidth(); 
+            int[][][] pixels = new int[height][width][3]; 
+ 
+            for (int y = 0; y < height; y++) { 
+                for (int x = 0; x < width; x++) { 
+                    int rgb = image.getRGB(x, y); 
+                    pixels[y][x][0] = (rgb >> 16) & 0xFF; // Red 
+                    pixels[y][x][1] = (rgb >> 8) & 0xFF;  // Green 
+                    pixels[y][x][2] = rgb & 0xFF;         // Blue 
+                } 
+            } 
+ 
+            return pixels; 
+        } catch (IOException e) { 
+            e.printStackTrace(); 
+            return null; 
+        } 
+    } 
+}

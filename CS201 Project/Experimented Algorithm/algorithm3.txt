@@ -1,0 +1,39 @@
+// TRY TO BUILD QUADTREE FROM SCRATCH
+
+import java.io.*;
+import java.util.ArrayList;
+import java.util.List;
+
+import src.Quadtree;
+
+public class Utility {
+
+    // Compression method without Huffman encoding
+    public void Compress(int[][][] pixels, String outputFileName) throws IOException {
+
+        Quadtree quadtree = new Quadtree(pixels);
+
+        try (FileOutputStream fos = new FileOutputStream(outputFileName);
+             ObjectOutputStream oos = new ObjectOutputStream(fos)) {
+            oos.writeObject(quadtree);
+        }
+    }
+
+    // Decompression method without Huffman decoding
+    public int[][][] Decompress(String inputFileName) throws IOException, ClassNotFoundException {
+        try (ObjectInputStream input = new ObjectInputStream(new FileInputStream(inputFileName))) {
+            // Read the serialized Quadtree object from the input file
+            Quadtree quadtree = (Quadtree) input.readObject();
+
+            // Get the image width and height from the Quadtree
+            int imageWidth = quadtree.getWidth();
+            int imageHeight = quadtree.getHeight();
+
+            // Reconstruct the image data from the Quadtree
+            int[][][] image = quadtree.decompressQuadtree(quadtree.getRoot(), imageWidth, imageHeight);
+            
+
+            return image;
+        }
+    }
+}
